@@ -6,17 +6,23 @@
 
 **组队学习周期：** 12天
 
-**完整任务发布页：** [Data Mining](https://github.com/datawhalechina/Datawhale_Learning/blob/master/doc/%E7%90%86%E8%AE%BA%E5%BA%94%E7%94%A8/%E6%95%B0%E6%8D%AE%E6%8C%96%E6%8E%98/README.md)
+**完整任务发布页：** [数据挖掘实践任务](https://github.com/datawhalechina/Datawhale_Learning/blob/master/doc/%E7%90%86%E8%AE%BA%E5%BA%94%E7%94%A8/%E6%95%B0%E6%8D%AE%E6%8C%96%E6%8E%98/README.md)
+
+**打卡方式：** 对应自己的编号附上github或博客链接+提一个问题
+
+**通知归档：** [通知归档](https://shimo.im/docs/PW9qVDpxHRtrDPYG/)
 
 ## Task1：数据分析（2天）
 
-**任务1：对数据进行探索和分析**
+**任务1：对数据进行探索和分析，代码实现的过程上传到GitHub或博客**
 
 **说明：** 这份数据集是金融数据（非原始数据，已经处理过了），我们要做的是预测贷款用户是否会逾期。表格中 "status" 是结果标签：0表示未逾期，1表示逾期。
 
 **要求：** 数据切分方式 - 三七分，其中测试集30%，训练集70%，随机种子设置为2018
 
 **时间：** 2天
+
+**Deadline：** 2019.8.6 周二 晚上10:00，大家自行设好闹钟
 
 **具体任务：**
 
