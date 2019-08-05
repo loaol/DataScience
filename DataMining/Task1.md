@@ -669,13 +669,31 @@ data.describe()
 
 
 
+ - **结果标签分布情况**
+
+
+```python
+data.status.value_counts()
+```
+
+
+
+
+    0    3561
+    1    1193
+    Name: status, dtype: int64
+
+
+
 **结论一：** 可以看到数据共有4754行，其中浮点型数据70列、整数型13列、object 型7列，**需要对 object 类型的数据进行处理才能建立模型。**
 
 **结论二：** 数据在整体上是相当完整的，**除了 student_feature 这个标签有较多缺失值以外，其他数据仅有很小的缺失。**
 
 **结论三：** **大部分数据特征存在拖尾现象，** 即特征的 max(min) 明显偏离其 mean ，需要对这些数据进行进一步的处理才能建立准确的模型。
 
-**注意：** 有的列像 'first_transaction_time'，它的值其实是日期的形式类似 20130817 这样，**pandas把它认为是int型的**，其实不是，这也需要注意。
+**结论四：** **数据集正例与负例数量存在显著差异，** 需要使用 **分层抽样** 的方式对数据集进行抽样划分，否则会导致 **模型对未逾期结果预测较为准确，而对逾期结果预测偏差较大。**
+
+**注意：** 有的列像 'first_transaction_time'，它的值其实是日期的形式类似 20130817 这样，**pandas 把它认为是 int 型的**，其实不是，这也需要注意。
 
 -------
 ### 2&emsp;无关特征的删除
@@ -873,19 +891,26 @@ data.head()
 --------
 ### 3&emsp;数据类型转换
 
-由于特征并不都是数值型特征，因此我们还需要对数据类型进行转换。
+经过无关特征删除后，我们还有两个特征需要进行转换：
 
-经过无关特征删除后，我们还存有一个 object 类型特征（城市等级：'reg_preference_for_trad'），其余均为数值型特征。
+ -  object 类型特征（城市等级：'reg_preference_for_trad'）
+ 
+ 
+ - 时间格式特征（首次交易时间：'first_transaction_time_day'）
+
+**3.1&ensp;&ensp;reg_preference_for_trad 转换**
+
+首先我们查看一下该特征下有哪些数据
 
 
 ```python
 print(data.reg_preference_for_trad.unique())
 ```
 
-    [ 1.  3.  4.  2.  5. nan]
+    ['一线城市' '三线城市' '境外' '二线城市' '其他城市' nan]
     
 
- - 数据类型转换
+这里我们先简单的进行数据转换，特征提取时可以采用 one-hot 编码改进进行改进。
 
 
 ```python
@@ -900,9 +925,21 @@ for i in range(0, data.shape[0]):
         data.reg_preference_for_trad[i] = 4
     elif data.reg_preference_for_trad[i] == '其他城市':
         data.reg_preference_for_trad[i] = 5
-
-# 特征提取时可以采用 one-hot 编码改进
 ```
+
+**3.2  first_transaction_time_day 转换**
+
+
+```python
+tmpdf = pd.DataFrame()
+tmpdf['first_transaction_time_year'] = pd.to_datetime(data['first_transaction_time']).dt.year
+tmpdf['first_transaction_time_month'] = pd.to_datetime(data['first_transaction_time']).dt.month
+tmpdf['first_transaction_time_day'] = pd.to_datetime(data['first_transaction_time']).dt.day
+data[tmpdf.columns] = tmpdf
+data = data.drop('first_transaction_time_day', axis = 1)
+```
+
+**3.3&ensp;&ensp;结果查看**
 
 
 ```python
@@ -910,10 +947,12 @@ data = data.convert_objects(convert_numeric=True)
 print(data.dtypes.value_counts())
 ```
 
-    float64    71
+    float64    73
     int64      11
     dtype: int64
     
+
+至此，数据类型的转换工作完成
 
 --------
 ### 4&emsp;处理缺失值
@@ -938,7 +977,8 @@ data = data.dropna(axis=0, thresh = 75)#删除缺失值超过7个的行
 
 
 ```python
-data = data.fillna(data.mean())
+data = data.fillna(data.median())
+
 data
 ```
 
@@ -974,8 +1014,6 @@ data
       <th>trans_days_interval</th>
       <th>regional_mobility</th>
       <th>...</th>
-      <th>loans_max_limit</th>
-      <th>loans_avg_limit</th>
       <th>consfin_credit_limit</th>
       <th>consfin_credibility</th>
       <th>consfin_org_count_current</th>
@@ -984,6 +1022,8 @@ data
       <th>consfin_avg_limit</th>
       <th>latest_query_day</th>
       <th>loans_latest_day</th>
+      <th>first_transaction_time_year</th>
+      <th>first_transaction_time_month</th>
     </tr>
   </thead>
   <tbody>
@@ -1000,8 +1040,6 @@ data
       <td>26.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>2900.0</td>
-      <td>1688.0</td>
       <td>1200.0</td>
       <td>75.0</td>
       <td>1.0</td>
@@ -1010,6 +1048,8 @@ data
       <td>1200.0</td>
       <td>12.0</td>
       <td>18.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>1</th>
@@ -1024,8 +1064,6 @@ data
       <td>14.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>3500.0</td>
-      <td>1758.0</td>
       <td>15100.0</td>
       <td>80.0</td>
       <td>5.0</td>
@@ -1034,6 +1072,8 @@ data
       <td>9360.0</td>
       <td>4.0</td>
       <td>2.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>2</th>
@@ -1048,8 +1088,6 @@ data
       <td>22.0</td>
       <td>1.0</td>
       <td>...</td>
-      <td>1600.0</td>
-      <td>1250.0</td>
       <td>4200.0</td>
       <td>87.0</td>
       <td>1.0</td>
@@ -1058,6 +1096,8 @@ data
       <td>4200.0</td>
       <td>2.0</td>
       <td>6.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>3</th>
@@ -1072,8 +1112,6 @@ data
       <td>6.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>3200.0</td>
-      <td>1541.0</td>
       <td>16300.0</td>
       <td>80.0</td>
       <td>5.0</td>
@@ -1082,6 +1120,8 @@ data
       <td>12180.0</td>
       <td>2.0</td>
       <td>4.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4</th>
@@ -1096,8 +1136,6 @@ data
       <td>42.0</td>
       <td>1.0</td>
       <td>...</td>
-      <td>2300.0</td>
-      <td>1630.0</td>
       <td>8300.0</td>
       <td>79.0</td>
       <td>2.0</td>
@@ -1106,6 +1144,8 @@ data
       <td>8250.0</td>
       <td>22.0</td>
       <td>120.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>5</th>
@@ -1120,8 +1160,6 @@ data
       <td>11.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>5300.0</td>
-      <td>1941.0</td>
       <td>11200.0</td>
       <td>80.0</td>
       <td>10.0</td>
@@ -1130,6 +1168,8 @@ data
       <td>8130.0</td>
       <td>3.0</td>
       <td>4.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>6</th>
@@ -1144,8 +1184,6 @@ data
       <td>53.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>2200.0</td>
-      <td>2200.0</td>
       <td>7600.0</td>
       <td>73.0</td>
       <td>2.0</td>
@@ -1154,6 +1192,8 @@ data
       <td>8900.0</td>
       <td>1.0</td>
       <td>3.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>8</th>
@@ -1168,8 +1208,6 @@ data
       <td>14.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>5300.0</td>
-      <td>4750.0</td>
       <td>5500.0</td>
       <td>79.0</td>
       <td>8.0</td>
@@ -1178,6 +1216,8 @@ data
       <td>7987.0</td>
       <td>24.0</td>
       <td>7.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>9</th>
@@ -1192,8 +1232,6 @@ data
       <td>35.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>2800.0</td>
-      <td>1520.0</td>
       <td>0.0</td>
       <td>0.0</td>
       <td>0.0</td>
@@ -1202,6 +1240,8 @@ data
       <td>0.0</td>
       <td>18.0</td>
       <td>142.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>10</th>
@@ -1216,8 +1256,6 @@ data
       <td>21.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>1800.0</td>
-      <td>1325.0</td>
       <td>9900.0</td>
       <td>80.0</td>
       <td>7.0</td>
@@ -1226,6 +1264,8 @@ data
       <td>7757.0</td>
       <td>12.0</td>
       <td>9.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>11</th>
@@ -1240,8 +1280,6 @@ data
       <td>11.0</td>
       <td>1.0</td>
       <td>...</td>
-      <td>3900.0</td>
-      <td>2450.0</td>
       <td>8300.0</td>
       <td>85.0</td>
       <td>3.0</td>
@@ -1250,6 +1288,8 @@ data
       <td>9400.0</td>
       <td>31.0</td>
       <td>35.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>12</th>
@@ -1264,8 +1304,6 @@ data
       <td>13.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>3500.0</td>
-      <td>2000.0</td>
       <td>19300.0</td>
       <td>79.0</td>
       <td>7.0</td>
@@ -1274,6 +1312,8 @@ data
       <td>16985.0</td>
       <td>38.0</td>
       <td>6.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>13</th>
@@ -1288,8 +1328,6 @@ data
       <td>13.0</td>
       <td>1.0</td>
       <td>...</td>
-      <td>9300.0</td>
-      <td>2240.0</td>
       <td>5000.0</td>
       <td>83.0</td>
       <td>5.0</td>
@@ -1298,6 +1336,8 @@ data
       <td>5460.0</td>
       <td>13.0</td>
       <td>9.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>14</th>
@@ -1312,8 +1352,6 @@ data
       <td>18.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>2000.0</td>
-      <td>1600.0</td>
       <td>0.0</td>
       <td>0.0</td>
       <td>0.0</td>
@@ -1322,6 +1360,8 @@ data
       <td>0.0</td>
       <td>16.0</td>
       <td>193.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>15</th>
@@ -1336,8 +1376,6 @@ data
       <td>17.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>4100.0</td>
-      <td>2633.0</td>
       <td>18400.0</td>
       <td>79.0</td>
       <td>9.0</td>
@@ -1346,6 +1384,8 @@ data
       <td>17633.0</td>
       <td>4.0</td>
       <td>27.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>16</th>
@@ -1360,8 +1400,6 @@ data
       <td>15.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>4500.0</td>
-      <td>2480.0</td>
       <td>21300.0</td>
       <td>77.0</td>
       <td>4.0</td>
@@ -1369,6 +1407,8 @@ data
       <td>27600.0</td>
       <td>9900.0</td>
       <td>3.0</td>
+      <td>1.0</td>
+      <td>1970.0</td>
       <td>1.0</td>
     </tr>
     <tr>
@@ -1384,8 +1424,6 @@ data
       <td>14.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>2000.0</td>
-      <td>1575.0</td>
       <td>4700.0</td>
       <td>80.0</td>
       <td>8.0</td>
@@ -1394,6 +1432,8 @@ data
       <td>4062.0</td>
       <td>9.0</td>
       <td>7.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>18</th>
@@ -1408,8 +1448,6 @@ data
       <td>17.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>5000.0</td>
-      <td>2533.0</td>
       <td>10100.0</td>
       <td>78.0</td>
       <td>4.0</td>
@@ -1418,6 +1456,8 @@ data
       <td>10275.0</td>
       <td>26.0</td>
       <td>77.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>19</th>
@@ -1432,8 +1472,6 @@ data
       <td>15.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>6200.0</td>
-      <td>1957.0</td>
       <td>10100.0</td>
       <td>79.0</td>
       <td>8.0</td>
@@ -1442,6 +1480,8 @@ data
       <td>8187.0</td>
       <td>12.0</td>
       <td>37.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>20</th>
@@ -1456,8 +1496,6 @@ data
       <td>18.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>500.0</td>
-      <td>500.0</td>
       <td>8400.0</td>
       <td>74.0</td>
       <td>1.0</td>
@@ -1466,6 +1504,8 @@ data
       <td>8400.0</td>
       <td>3.0</td>
       <td>71.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>21</th>
@@ -1480,8 +1520,6 @@ data
       <td>41.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>2400.0</td>
-      <td>1633.0</td>
       <td>16500.0</td>
       <td>76.0</td>
       <td>2.0</td>
@@ -1490,6 +1528,8 @@ data
       <td>18600.0</td>
       <td>7.0</td>
       <td>23.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>22</th>
@@ -1504,8 +1544,6 @@ data
       <td>19.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>9000.0</td>
-      <td>3080.0</td>
       <td>21900.0</td>
       <td>79.0</td>
       <td>11.0</td>
@@ -1513,6 +1551,8 @@ data
       <td>39600.0</td>
       <td>20454.0</td>
       <td>4.0</td>
+      <td>1.0</td>
+      <td>1970.0</td>
       <td>1.0</td>
     </tr>
     <tr>
@@ -1528,8 +1568,6 @@ data
       <td>13.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>3500.0</td>
-      <td>1900.0</td>
       <td>8100.0</td>
       <td>80.0</td>
       <td>6.0</td>
@@ -1538,6 +1576,8 @@ data
       <td>6100.0</td>
       <td>12.0</td>
       <td>9.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>24</th>
@@ -1552,8 +1592,6 @@ data
       <td>15.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>1000.0</td>
-      <td>750.0</td>
       <td>14000.0</td>
       <td>75.0</td>
       <td>3.0</td>
@@ -1562,6 +1600,8 @@ data
       <td>15500.0</td>
       <td>14.0</td>
       <td>104.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>25</th>
@@ -1576,8 +1616,6 @@ data
       <td>23.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>5000.0</td>
-      <td>1560.0</td>
       <td>10400.0</td>
       <td>78.0</td>
       <td>12.0</td>
@@ -1586,6 +1624,8 @@ data
       <td>9841.0</td>
       <td>21.0</td>
       <td>82.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>26</th>
@@ -1600,8 +1640,6 @@ data
       <td>12.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>2500.0</td>
-      <td>1671.0</td>
       <td>6500.0</td>
       <td>77.0</td>
       <td>2.0</td>
@@ -1610,6 +1648,8 @@ data
       <td>7050.0</td>
       <td>10.0</td>
       <td>80.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>27</th>
@@ -1624,8 +1664,6 @@ data
       <td>42.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>5700.0</td>
-      <td>3160.0</td>
       <td>7000.0</td>
       <td>78.0</td>
       <td>13.0</td>
@@ -1634,6 +1672,8 @@ data
       <td>6461.0</td>
       <td>20.0</td>
       <td>6.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>28</th>
@@ -1648,8 +1688,6 @@ data
       <td>14.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>2700.0</td>
-      <td>1825.0</td>
       <td>21600.0</td>
       <td>78.0</td>
       <td>1.0</td>
@@ -1658,6 +1696,8 @@ data
       <td>21600.0</td>
       <td>5.0</td>
       <td>9.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>30</th>
@@ -1672,8 +1712,6 @@ data
       <td>23.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>1500.0</td>
-      <td>1050.0</td>
       <td>9200.0</td>
       <td>76.0</td>
       <td>8.0</td>
@@ -1682,6 +1720,8 @@ data
       <td>8250.0</td>
       <td>152.0</td>
       <td>64.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>31</th>
@@ -1696,8 +1736,6 @@ data
       <td>77.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>1700.0</td>
-      <td>1700.0</td>
       <td>18000.0</td>
       <td>78.0</td>
       <td>1.0</td>
@@ -1706,6 +1744,8 @@ data
       <td>18000.0</td>
       <td>10.0</td>
       <td>139.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>...</th>
@@ -1744,8 +1784,6 @@ data
       <td>17.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>3500.0</td>
-      <td>2187.0</td>
       <td>10200.0</td>
       <td>74.0</td>
       <td>5.0</td>
@@ -1754,6 +1792,8 @@ data
       <td>10880.0</td>
       <td>27.0</td>
       <td>145.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4724</th>
@@ -1768,8 +1808,6 @@ data
       <td>22.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>3800.0</td>
-      <td>2271.0</td>
       <td>5000.0</td>
       <td>79.0</td>
       <td>5.0</td>
@@ -1778,6 +1816,8 @@ data
       <td>3460.0</td>
       <td>21.0</td>
       <td>5.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4725</th>
@@ -1792,8 +1832,6 @@ data
       <td>28.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>2100.0</td>
-      <td>1166.0</td>
       <td>17200.0</td>
       <td>78.0</td>
       <td>4.0</td>
@@ -1802,6 +1840,8 @@ data
       <td>11850.0</td>
       <td>142.0</td>
       <td>100.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4726</th>
@@ -1816,8 +1856,6 @@ data
       <td>35.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>3000.0</td>
-      <td>1960.0</td>
       <td>4800.0</td>
       <td>75.0</td>
       <td>1.0</td>
@@ -1826,6 +1864,8 @@ data
       <td>4800.0</td>
       <td>19.0</td>
       <td>53.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4727</th>
@@ -1840,8 +1880,6 @@ data
       <td>14.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>3100.0</td>
-      <td>1812.0</td>
       <td>4800.0</td>
       <td>76.0</td>
       <td>4.0</td>
@@ -1850,6 +1888,8 @@ data
       <td>5125.0</td>
       <td>28.0</td>
       <td>57.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4728</th>
@@ -1864,8 +1904,6 @@ data
       <td>22.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>2500.0</td>
-      <td>1662.0</td>
       <td>10800.0</td>
       <td>80.0</td>
       <td>6.0</td>
@@ -1874,6 +1912,8 @@ data
       <td>8933.0</td>
       <td>18.0</td>
       <td>9.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4729</th>
@@ -1888,8 +1928,6 @@ data
       <td>27.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>2500.0</td>
-      <td>1518.0</td>
       <td>6200.0</td>
       <td>80.0</td>
       <td>4.0</td>
@@ -1898,6 +1936,8 @@ data
       <td>7200.0</td>
       <td>3.0</td>
       <td>104.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4730</th>
@@ -1912,8 +1952,6 @@ data
       <td>32.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>3100.0</td>
-      <td>1771.0</td>
       <td>15600.0</td>
       <td>78.0</td>
       <td>1.0</td>
@@ -1922,6 +1960,8 @@ data
       <td>15600.0</td>
       <td>28.0</td>
       <td>128.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4731</th>
@@ -1936,8 +1976,6 @@ data
       <td>12.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>3100.0</td>
-      <td>1818.0</td>
       <td>60200.0</td>
       <td>78.0</td>
       <td>13.0</td>
@@ -1946,6 +1984,8 @@ data
       <td>25361.0</td>
       <td>2.0</td>
       <td>11.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4732</th>
@@ -1960,8 +2000,6 @@ data
       <td>30.0</td>
       <td>1.0</td>
       <td>...</td>
-      <td>0.0</td>
-      <td>0.0</td>
       <td>4300.0</td>
       <td>80.0</td>
       <td>2.0</td>
@@ -1970,6 +2008,8 @@ data
       <td>4950.0</td>
       <td>9.0</td>
       <td>250.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4733</th>
@@ -1984,8 +2024,6 @@ data
       <td>18.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>4700.0</td>
-      <td>2320.0</td>
       <td>9000.0</td>
       <td>81.0</td>
       <td>3.0</td>
@@ -1994,6 +2032,8 @@ data
       <td>6900.0</td>
       <td>14.0</td>
       <td>9.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4734</th>
@@ -2008,8 +2048,6 @@ data
       <td>57.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>3100.0</td>
-      <td>1950.0</td>
       <td>1500.0</td>
       <td>78.0</td>
       <td>1.0</td>
@@ -2018,6 +2056,8 @@ data
       <td>1500.0</td>
       <td>24.0</td>
       <td>131.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4735</th>
@@ -2032,8 +2072,6 @@ data
       <td>25.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>4100.0</td>
-      <td>1750.0</td>
       <td>20300.0</td>
       <td>79.0</td>
       <td>4.0</td>
@@ -2042,6 +2080,8 @@ data
       <td>21100.0</td>
       <td>2.0</td>
       <td>6.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4736</th>
@@ -2056,8 +2096,6 @@ data
       <td>22.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>1200.0</td>
-      <td>850.0</td>
       <td>10200.0</td>
       <td>85.0</td>
       <td>1.0</td>
@@ -2066,6 +2104,8 @@ data
       <td>10200.0</td>
       <td>18.0</td>
       <td>156.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4737</th>
@@ -2080,8 +2120,6 @@ data
       <td>14.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>3700.0</td>
-      <td>1757.0</td>
       <td>14800.0</td>
       <td>78.0</td>
       <td>7.0</td>
@@ -2090,6 +2128,8 @@ data
       <td>11714.0</td>
       <td>1.0</td>
       <td>7.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4738</th>
@@ -2104,8 +2144,6 @@ data
       <td>28.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>900.0</td>
-      <td>900.0</td>
       <td>6800.0</td>
       <td>79.0</td>
       <td>2.0</td>
@@ -2114,6 +2152,8 @@ data
       <td>5700.0</td>
       <td>48.0</td>
       <td>89.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4739</th>
@@ -2128,8 +2168,6 @@ data
       <td>18.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>2300.0</td>
-      <td>1766.0</td>
       <td>3800.0</td>
       <td>72.0</td>
       <td>3.0</td>
@@ -2138,6 +2176,8 @@ data
       <td>3600.0</td>
       <td>12.0</td>
       <td>9.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4740</th>
@@ -2152,8 +2192,6 @@ data
       <td>12.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>3900.0</td>
-      <td>2200.0</td>
       <td>11300.0</td>
       <td>79.0</td>
       <td>3.0</td>
@@ -2162,6 +2200,8 @@ data
       <td>9200.0</td>
       <td>31.0</td>
       <td>163.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4741</th>
@@ -2176,8 +2216,6 @@ data
       <td>12.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>2300.0</td>
-      <td>2300.0</td>
       <td>13700.0</td>
       <td>80.0</td>
       <td>3.0</td>
@@ -2186,6 +2224,8 @@ data
       <td>13900.0</td>
       <td>9.0</td>
       <td>140.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4742</th>
@@ -2200,8 +2240,6 @@ data
       <td>14.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>4200.0</td>
-      <td>1928.0</td>
       <td>9200.0</td>
       <td>77.0</td>
       <td>7.0</td>
@@ -2210,6 +2248,8 @@ data
       <td>7557.0</td>
       <td>4.0</td>
       <td>4.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4743</th>
@@ -2224,8 +2264,6 @@ data
       <td>14.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>3500.0</td>
-      <td>1825.0</td>
       <td>1700.0</td>
       <td>72.0</td>
       <td>2.0</td>
@@ -2234,6 +2272,8 @@ data
       <td>2300.0</td>
       <td>11.0</td>
       <td>12.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4744</th>
@@ -2248,8 +2288,6 @@ data
       <td>16.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>3000.0</td>
-      <td>1691.0</td>
       <td>5200.0</td>
       <td>77.0</td>
       <td>9.0</td>
@@ -2258,6 +2296,8 @@ data
       <td>3344.0</td>
       <td>5.0</td>
       <td>88.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4745</th>
@@ -2272,8 +2312,6 @@ data
       <td>117.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>2100.0</td>
-      <td>1280.0</td>
       <td>6800.0</td>
       <td>82.0</td>
       <td>4.0</td>
@@ -2282,6 +2320,8 @@ data
       <td>5850.0</td>
       <td>1.0</td>
       <td>8.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4747</th>
@@ -2296,8 +2336,6 @@ data
       <td>15.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>1100.0</td>
-      <td>1100.0</td>
       <td>4500.0</td>
       <td>76.0</td>
       <td>5.0</td>
@@ -2306,6 +2344,8 @@ data
       <td>3260.0</td>
       <td>1.0</td>
       <td>22.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4748</th>
@@ -2320,8 +2360,6 @@ data
       <td>36.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>3100.0</td>
-      <td>2450.0</td>
       <td>17300.0</td>
       <td>75.0</td>
       <td>2.0</td>
@@ -2330,6 +2368,8 @@ data
       <td>18300.0</td>
       <td>35.0</td>
       <td>54.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4749</th>
@@ -2344,8 +2384,6 @@ data
       <td>24.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>0.0</td>
-      <td>0.0</td>
       <td>49200.0</td>
       <td>78.0</td>
       <td>1.0</td>
@@ -2354,6 +2392,8 @@ data
       <td>49200.0</td>
       <td>44.0</td>
       <td>58.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4750</th>
@@ -2368,8 +2408,6 @@ data
       <td>16.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>5000.0</td>
-      <td>1952.0</td>
       <td>10100.0</td>
       <td>78.0</td>
       <td>7.0</td>
@@ -2378,6 +2416,8 @@ data
       <td>7500.0</td>
       <td>17.0</td>
       <td>55.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4751</th>
@@ -2392,8 +2432,6 @@ data
       <td>25.0</td>
       <td>3.0</td>
       <td>...</td>
-      <td>3300.0</td>
-      <td>1540.0</td>
       <td>7600.0</td>
       <td>79.0</td>
       <td>8.0</td>
@@ -2402,6 +2440,8 @@ data
       <td>7250.0</td>
       <td>18.0</td>
       <td>55.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4752</th>
@@ -2416,8 +2456,6 @@ data
       <td>16.0</td>
       <td>4.0</td>
       <td>...</td>
-      <td>1900.0</td>
-      <td>1216.0</td>
       <td>7100.0</td>
       <td>79.0</td>
       <td>8.0</td>
@@ -2426,6 +2464,8 @@ data
       <td>3950.0</td>
       <td>55.0</td>
       <td>16.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
     <tr>
       <th>4753</th>
@@ -2440,8 +2480,6 @@ data
       <td>21.0</td>
       <td>2.0</td>
       <td>...</td>
-      <td>4000.0</td>
-      <td>2180.0</td>
       <td>4500.0</td>
       <td>74.0</td>
       <td>5.0</td>
@@ -2450,22 +2488,432 @@ data
       <td>4360.0</td>
       <td>20.0</td>
       <td>54.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
     </tr>
   </tbody>
 </table>
-<p>4423 rows × 82 columns</p>
+<p>4423 rows × 84 columns</p>
 </div>
 
 
 
 -------
-### 5&emsp;数据集切分
+### 5&emsp;异常值检验
+
+这里我们采用 LOF 算法进行异常值检验。
+
+LOF 算法参考文献：[LOF离群因子检测算法](https://zhuanlan.zhihu.com/p/37753692)
+
+ - **构造检验函数**
+
+
+```python
+def localoutlierfactor(data, predict, k):
+    from sklearn.neighbors import LocalOutlierFactor
+    LOF = LocalOutlierFactor(n_neighbors=k + 1, algorithm='auto', contamination=0.1, n_jobs=-1)
+    LOF.fit(data)
+    # 记录 k 邻域距离
+    predict['k distances'] = LOF.kneighbors(predict)[0].max(axis=1)
+    # 记录 LOF 离群因子，做相反数处理
+    predict['local outlier factor'] = -LOF._decision_function(predict.iloc[:, :-1])
+    return predict
+
+def lof(data, predict=None, k=10, method=1):
+    import pandas as pd
+    # 判断是否传入测试数据，若没有传入则测试数据赋值为训练数据
+    try:
+        if predict == None:
+            predict = data.copy()
+    except Exception:
+        pass
+    predict = pd.DataFrame(predict)
+    # 计算 LOF 离群因子
+    predict = localoutlierfactor(data, predict, k)
+    # 根据阈值划分离群点与正常点
+    outliers = predict[predict['local outlier factor'] > method].sort_values(by='local outlier factor')
+    inliers = predict[predict['local outlier factor'] <= method].sort_values(by='local outlier factor')
+    return outliers, inliers
+```
+
+ - **计算并删除异常样本**
+
+
+```python
+out_data, in_data = lof(data, k=10, method = 2)
+data.drop(out_data.index, axis = 0)
+
+out_data
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>low_volume_percent</th>
+      <th>middle_volume_percent</th>
+      <th>take_amount_in_later_12_month_highest</th>
+      <th>trans_amount_increase_rate_lately</th>
+      <th>trans_activity_month</th>
+      <th>trans_activity_day</th>
+      <th>transd_mcc</th>
+      <th>trans_days_interval_filter</th>
+      <th>trans_days_interval</th>
+      <th>regional_mobility</th>
+      <th>...</th>
+      <th>consfin_org_count_current</th>
+      <th>consfin_product_count</th>
+      <th>consfin_max_limit</th>
+      <th>consfin_avg_limit</th>
+      <th>latest_query_day</th>
+      <th>loans_latest_day</th>
+      <th>first_transaction_time_year</th>
+      <th>first_transaction_time_month</th>
+      <th>k distances</th>
+      <th>local outlier factor</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>1002</th>
+      <td>0.00</td>
+      <td>0.71</td>
+      <td>2000</td>
+      <td>0.55</td>
+      <td>1.00</td>
+      <td>0.683</td>
+      <td>15.0</td>
+      <td>15.0</td>
+      <td>10.0</td>
+      <td>2.0</td>
+      <td>...</td>
+      <td>10.0</td>
+      <td>11.0</td>
+      <td>25200.0</td>
+      <td>10840.0</td>
+      <td>11.0</td>
+      <td>8.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+      <td>4.139863e+05</td>
+      <td>2.086765</td>
+    </tr>
+    <tr>
+      <th>1576</th>
+      <td>0.00</td>
+      <td>0.76</td>
+      <td>3300</td>
+      <td>0.02</td>
+      <td>0.98</td>
+      <td>0.941</td>
+      <td>17.0</td>
+      <td>24.0</td>
+      <td>5.0</td>
+      <td>2.0</td>
+      <td>...</td>
+      <td>2.0</td>
+      <td>2.0</td>
+      <td>12000.0</td>
+      <td>11850.0</td>
+      <td>3.0</td>
+      <td>15.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+      <td>1.002926e+06</td>
+      <td>2.908565</td>
+    </tr>
+    <tr>
+      <th>2938</th>
+      <td>0.01</td>
+      <td>0.73</td>
+      <td>1000</td>
+      <td>0.36</td>
+      <td>1.00</td>
+      <td>0.897</td>
+      <td>19.0</td>
+      <td>21.0</td>
+      <td>5.0</td>
+      <td>1.0</td>
+      <td>...</td>
+      <td>3.0</td>
+      <td>3.0</td>
+      <td>13200.0</td>
+      <td>5733.0</td>
+      <td>15.0</td>
+      <td>23.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+      <td>2.383146e+06</td>
+      <td>6.386036</td>
+    </tr>
+    <tr>
+      <th>2603</th>
+      <td>0.00</td>
+      <td>0.28</td>
+      <td>4000</td>
+      <td>13.70</td>
+      <td>1.00</td>
+      <td>0.886</td>
+      <td>25.0</td>
+      <td>7.0</td>
+      <td>5.0</td>
+      <td>2.0</td>
+      <td>...</td>
+      <td>4.0</td>
+      <td>5.0</td>
+      <td>17400.0</td>
+      <td>9000.0</td>
+      <td>23.0</td>
+      <td>-1.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+      <td>1.305017e+07</td>
+      <td>7.071480</td>
+    </tr>
+    <tr>
+      <th>471</th>
+      <td>0.01</td>
+      <td>0.88</td>
+      <td>0</td>
+      <td>0.45</td>
+      <td>0.78</td>
+      <td>0.452</td>
+      <td>18.0</td>
+      <td>30.0</td>
+      <td>23.0</td>
+      <td>2.0</td>
+      <td>...</td>
+      <td>6.0</td>
+      <td>7.0</td>
+      <td>37200.0</td>
+      <td>14016.0</td>
+      <td>21.0</td>
+      <td>5.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+      <td>1.440188e+06</td>
+      <td>7.183463</td>
+    </tr>
+  </tbody>
+</table>
+<p>5 rows × 86 columns</p>
+</div>
+
+
+
+-------
+### 6&emsp;数据集切分
+
+ - **分层抽样重构数据集**
+
+
+```python
+dfstatus0 = data[data.status == 0]
+dfstatus1 = data[data.status == 1]
+dfstatus1.sample(frac=data.status.value_counts()[1], replace=True, random_state=2018)
+
+newdata = pd.concat([dfstatus0, dfstatus1], ignore_index=False)
+newdata.sort_index(inplace=True)
+newdata = newdata.reset_index(drop=True)
+newdata.head()
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>low_volume_percent</th>
+      <th>middle_volume_percent</th>
+      <th>take_amount_in_later_12_month_highest</th>
+      <th>trans_amount_increase_rate_lately</th>
+      <th>trans_activity_month</th>
+      <th>trans_activity_day</th>
+      <th>transd_mcc</th>
+      <th>trans_days_interval_filter</th>
+      <th>trans_days_interval</th>
+      <th>regional_mobility</th>
+      <th>...</th>
+      <th>consfin_credit_limit</th>
+      <th>consfin_credibility</th>
+      <th>consfin_org_count_current</th>
+      <th>consfin_product_count</th>
+      <th>consfin_max_limit</th>
+      <th>consfin_avg_limit</th>
+      <th>latest_query_day</th>
+      <th>loans_latest_day</th>
+      <th>first_transaction_time_year</th>
+      <th>first_transaction_time_month</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>0.01</td>
+      <td>0.99</td>
+      <td>0</td>
+      <td>0.90</td>
+      <td>0.55</td>
+      <td>0.313</td>
+      <td>17.0</td>
+      <td>27.0</td>
+      <td>26.0</td>
+      <td>3.0</td>
+      <td>...</td>
+      <td>1200.0</td>
+      <td>75.0</td>
+      <td>1.0</td>
+      <td>2.0</td>
+      <td>1200.0</td>
+      <td>1200.0</td>
+      <td>12.0</td>
+      <td>18.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>0.02</td>
+      <td>0.94</td>
+      <td>2000</td>
+      <td>1.28</td>
+      <td>1.00</td>
+      <td>0.458</td>
+      <td>19.0</td>
+      <td>30.0</td>
+      <td>14.0</td>
+      <td>4.0</td>
+      <td>...</td>
+      <td>15100.0</td>
+      <td>80.0</td>
+      <td>5.0</td>
+      <td>6.0</td>
+      <td>22800.0</td>
+      <td>9360.0</td>
+      <td>4.0</td>
+      <td>2.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>0.04</td>
+      <td>0.96</td>
+      <td>0</td>
+      <td>1.00</td>
+      <td>1.00</td>
+      <td>0.114</td>
+      <td>13.0</td>
+      <td>68.0</td>
+      <td>22.0</td>
+      <td>1.0</td>
+      <td>...</td>
+      <td>4200.0</td>
+      <td>87.0</td>
+      <td>1.0</td>
+      <td>1.0</td>
+      <td>4200.0</td>
+      <td>4200.0</td>
+      <td>2.0</td>
+      <td>6.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>0.00</td>
+      <td>0.96</td>
+      <td>2000</td>
+      <td>0.13</td>
+      <td>0.57</td>
+      <td>0.777</td>
+      <td>22.0</td>
+      <td>14.0</td>
+      <td>6.0</td>
+      <td>3.0</td>
+      <td>...</td>
+      <td>16300.0</td>
+      <td>80.0</td>
+      <td>5.0</td>
+      <td>5.0</td>
+      <td>30000.0</td>
+      <td>12180.0</td>
+      <td>2.0</td>
+      <td>4.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>0.01</td>
+      <td>0.99</td>
+      <td>0</td>
+      <td>0.46</td>
+      <td>1.00</td>
+      <td>0.175</td>
+      <td>13.0</td>
+      <td>66.0</td>
+      <td>42.0</td>
+      <td>1.0</td>
+      <td>...</td>
+      <td>8300.0</td>
+      <td>79.0</td>
+      <td>2.0</td>
+      <td>2.0</td>
+      <td>8400.0</td>
+      <td>8250.0</td>
+      <td>22.0</td>
+      <td>120.0</td>
+      <td>1970.0</td>
+      <td>1.0</td>
+    </tr>
+  </tbody>
+</table>
+<p>5 rows × 84 columns</p>
+</div>
+
+
+
+ - **数据集切分**
 
 
 ```python
 from sklearn.model_selection import train_test_split
 
-train_data, test_data = train_test_split(data, test_size=0.3, random_state=2018)
+train_data, test_data = train_test_split(newdata, test_size=0.3, random_state=2018)
 train_data.to_csv('./data/train_data.csv', index=False, header=True)
 test_data.to_csv('./data/test_data.csv', index=False, header=True)
 ```
